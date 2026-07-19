@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>เวลาทำงานของฉัน</title>
+<script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+<style>
+  body { font-family: -apple-system, 'Noto Sans Thai', sans-serif; background:#f5f6f8; margin:0; padding:16px; color:#222; }
+  h2 { font-size:18px; margin:0 0 4px; }
+  .month { color:#888; font-size:13px; margin-bottom:16px; }
+  table { width:100%; border-collapse:collapse; background:#fff; border-radius:8px; overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,.08); }
+  th, td { padding:10px 8px; text-align:center; font-size:14px; }
+  th { background:#06c755; color:#fff; font-weight:600; }
+  tr:nth-child(even) td { background:#fafafa; }
+  .missing { color:#e05252; font-weight:600; }
+  .note { margin-top:14px; font-size:12px; color:#999; text-align:center; }
+  .loading, .error { text-align:center; padding:40px 0; color:#888; }
+</style>
+</head>
+<body>
+<div id="app" class="loading">กำลังโหลดข้อมูล...</div>
+
+<script>
+  // ใส่ LIFF ID ของแอปที่สร้างใน LINE Developers Console
+  const LIFF_ID = '2010755387-lPDR2791';
+
+  // URL ของ Apps Script (Web app) แบบตรงๆ ไม่อ้างอิงจากหน้าปัจจุบัน
+  const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx_zLS4yt-v9vRyLI_rqUtH5ew0gmNkqqBUIXA_Z5y3iBWf2S0essS8_yloIlxs5UTXOA/exec';
+
+  document.getElementById('app').innerText = 'กำลังเริ่มต้น LIFF...';
+
+  liff.init({ liffId: LIFF_ID }).then(() => {
+    document.getElementById('app').innerText = 'ตรวจสอบการล็อกอิน...';
+    if (!liff.isLoggedIn()) {
+      liff.login();
+      return;
+    }
+    document.getElementById('app').innerText = 'กำลังดึงโปรไฟล์...';
+    liff.getProfile().then(profile => {
+      document.getElementById('app').innerText = 'ได้ userId: ' + profile.userId + ' กำลังโหลดตาราง...';
+      loadData(profile.userId);
+    }).catch(err => showError('getProfile ล้มเหลว: ' + err));
+  }).catch(err => showError('liff.init ล้มเหลว: ' + err));
+
+  function loadData(userId) {
+    const now = new Date();
+    const yearMonth = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
+    const url = APPS_SCRIPT_URL
+      + '?action=getAttendance&userId=' + encodeURIComponent(userId)
+      + '&yearMonth=' + encodeURIComponent(yearMonth);
+    fetch(url)
+      .then(res => res.json())
+      .then(renderTable)
+      .catch(err => showError('โหลดข้อมูลไม่สำเร็จ: ' + err));
+  }
+
+  function renderTable(result) {
+    if (result.error) { showError(result.error); return; }
+    let rows = '';
+    result.records.forEach(r => {
+      const inCell = r.checkIn ? r.checkIn : '<span class="missing">ไม่พบ</span>';
+      const outCell = r.checkOut ? r.checkOut : '<span class="missing">ไม่พบ</span>';
+      rows += `<tr><td>${r.date}</td><td>${inCell}</td><td>${outCell}</td></tr>`;
+    });
+    if (!rows) rows = '<tr><td colspan="3">ยังไม่มีข้อมูลในเดือนนี้</td></tr>';
+
+    document.getElementById('app').outerHTML = `
+      <div>
+        <h2>${result.name}</h2>
+        <div class="month">ประจำเดือน ${result.yearMonth}</div>
+        <table>
+          <tr><th>วันที่</th><th>เข้างาน</th><th>เลิกงาน</th></tr>
+          ${rows}
+        </table>
+        <div class="note">หน้านี้แสดงผลอย่างเดียว ไม่สามารถแก้ไขข้อมูลได้ หากพบเวลาผิดพลาดกรุณาแจ้งแอดมิน</div>
+      </div>`;
+  }
+
+  function showError(msg) {
+    document.getElementById('app').className = 'error';
+    document.getElementById('app').innerText = msg;
+  }
+</script>
+</body>
+</html>
