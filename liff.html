@@ -22,10 +22,7 @@
 <div id="app" class="loading">กำลังโหลดข้อมูล...</div>
 
 <script>
-  // ใส่ LIFF ID ของแอปที่สร้างใน LINE Developers Console
   const LIFF_ID = '2010755387-lPDR2791';
-
-  // URL ของ Apps Script (Web app) แบบตรงๆ ไม่อ้างอิงจากหน้าปัจจุบัน
   const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx_zLS4yt-v9vRyLI_rqUtH5ew0gmNkqqBUIXA_Z5y3iBWf2S0essS8_yloIlxs5UTXOA/exec';
 
   document.getElementById('app').innerText = 'กำลังเริ่มต้น LIFF...';
@@ -46,13 +43,27 @@
   function loadData(userId) {
     const now = new Date();
     const yearMonth = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
+    const callbackName = 'liffCallback_' + Date.now();
+
+    window[callbackName] = function (result) {
+      renderTable(result);
+      delete window[callbackName];
+      if (scriptTag && scriptTag.parentNode) {
+        scriptTag.parentNode.removeChild(scriptTag);
+      }
+    };
+
     const url = APPS_SCRIPT_URL
       + '?action=getAttendance&userId=' + encodeURIComponent(userId)
-      + '&yearMonth=' + encodeURIComponent(yearMonth);
-    fetch(url)
-      .then(res => res.json())
-      .then(renderTable)
-      .catch(err => showError('โหลดข้อมูลไม่สำเร็จ: ' + err));
+      + '&yearMonth=' + encodeURIComponent(yearMonth)
+      + '&callback=' + callbackName;
+
+    const scriptTag = document.createElement('script');
+    scriptTag.src = url;
+    scriptTag.onerror = function () {
+      showError('โหลดข้อมูลไม่สำเร็จ: เชื่อมต่อกับเซิร์ฟเวอร์ไม่ได้');
+    };
+    document.body.appendChild(scriptTag);
   }
 
   function renderTable(result) {
