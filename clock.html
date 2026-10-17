@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ลงเวลาทำงาน</title>
+<script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+<style>
+  body { font-family: sans-serif; margin: 0; padding: 24px 16px; background: #f4f6f8; color: #222; text-align: center; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  #who { color: #555; margin-bottom: 24px; min-height: 22px; }
+  button { display: block; width: 100%; max-width: 360px; margin: 12px auto; padding: 22px; font-size: 22px;
+           border: 0; border-radius: 14px; color: #fff; }
+  #bin { background: #1e9e5a; } #bout { background: #d9534f; }
+  button:disabled { opacity: .5; }
+  #msg { margin: 20px auto; max-width: 360px; font-size: 17px; min-height: 48px; white-space: pre-wrap; }
+  #msg.ok { color: #1e7a46; } #msg.err { color: #c0392b; }
+  small { display: block; margin-top: 24px; color: #777; font-size: 12px; }
+</style>
+</head>
+<body>
+<h1>ลงเวลาทำงาน</h1>
+<div id="who">กำลังเตรียมระบบ...</div>
+<button id="bin" disabled onclick="clockNow('in')">เข้างาน</button>
+<button id="bout" disabled onclick="clockNow('out')">ออกงาน</button>
+<div id="msg"></div>
+<small>ระบบเก็บตำแหน่งที่ตั้งขณะลงเวลาเพื่อใช้ยืนยันการเข้า-ออกงานเท่านั้น</small>
+
+<script>
+// ===== แก้ 2 ค่านี้ก่อนอัปโหลด =====
+var LIFF_ID = '2010755387-LYgxFRkf';
+var GAS_URL = 'https://script.google.com/macros/s/AKfycbx_zLS4yt-v9vRyLl_rqUtH5ew0gmNkqqBUlXA_Z5y3iBWf2S0essS8_yloIIxs5UTXOA/exec';
+// ====================================
+
+var busy = false;
+
+function showMsg(t, cls) {
+  var m = document.getElementById('msg');
+  m.textContent = t; m.className = cls || '';
+}
+function setButtons(on) {
+  document.getElementById('bin').disabled = !on;
+  document.getElementById('bout').disabled = !on;
+}
+
+function getLocation_() {
+  return new Promise(function (resolve) {
+    if (!navigator.geolocation) { resolve({ error: 'NO_SUPPORT' }); return; }
+    navigator.geolocation.getCurrentPosition(
+      function (p) { resolve({ lat: p.coords.latitude, lng: p.coords.longitude, accuracy: p.coords.accuracy }); },
+      function (e) { resolve({ error: e.code }); },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+    );
+  });
+}
+
+async function clockNow(type) {
+  if (busy) return;
+  busy = true; setButtons(false);
+  showMsg('กำลังตรวจตำแหน่ง... (รอสักครู่)');
+  try {
+    var loc = await getLocation_();
+    if (loc.error) {
+      showMsg('อ่านตำแหน่งไม่ได้ กรุณาอนุญาตตำแหน่ง (Location) ให้ LINE แล้วลองใหม่\niPhone: ตั้งค่า > LINE > ตำแหน่ง', 'err');
+      return;
+    }
+    var profile = await liff.getProfile();
+    var res = await fetch(GAS_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({
+        action: 'clock', type: type,
+        userId: profile.userId, idToken: liff.getIDToken(),
+        lat: loc.lat, lng: loc.lng, accuracy: loc.accuracy
+      })
+    });
+    var out = await res.json();
+    showMsg(out.message || (out.ok ? 'บันทึกเรียบร้อย' : 'ลงเวลาไม่สำเร็จ'), out.ok ? 'ok' : 'err');
+  } catch (e) {
+    showMsg('ส่งข้อมูลไม่สำเร็จ กรุณาตรวจอินเทอร์เน็ตแล้วลองใหม่', 'err');
+  } finally {
+    busy = false; setButtons(true);
+  }
+}
+
+liff.init({ liffId: LIFF_ID }).then(function () {
+  if (!liff.isLoggedIn()) { liff.login(); return; }
+  return liff.getProfile().then(function (p) {
+    document.getElementById('who').textContent = p.displayName;
+    setButtons(true);
+  });
+}).catch(function (e) { showMsg('เปิดหน้านี้จากแอป LINE เท่านั้น (' + e.message + ')', 'err'); });
+</script>
+</body>
+</html>
